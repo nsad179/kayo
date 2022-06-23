@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Sitemap: https://zoro.to/sitemap.xml
+

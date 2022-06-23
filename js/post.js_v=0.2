@@ -1,0 +1,111 @@
+var postVoteLoading = false;
+$('.tags-item').click(function () {
+    $('.tags-item').removeClass('active');
+    $('.tags-item .active-icon').hide();
+
+    $(this).addClass('active');
+    $(this).find('.active-icon').show();
+
+    $('#selected-tags').text($(this).text());
+    $('input[name=tags_id]').val($(this).data('id'));
+});
+var postRecaptcha;
+grecaptcha.ready(() => {
+    if ($('#post-recaptcha').length > 0) {
+        postRecaptcha = grecaptcha.render('post-recaptcha', {
+            'sitekey': recaptchaV2SiteKey,
+            'callback': function () {
+                $('#post-form').addClass('recaptcha-clicked');
+            }
+        });
+    }
+});
+$('#post-form').submit(function (e) {
+    e.preventDefault();
+    if (!$(this).hasClass('recaptcha-clicked')) {
+        $('#post-error').html(`Please click "I'm not a robot"`);
+        $('#post-error').show();
+
+        setTimeout(function () {
+            $('#login-error').hide();
+        }, 6000);
+
+        return false;
+    }
+
+    if (!isLoading) {
+        isLoading = true;
+        $('#post-loading').show();
+        $('#post-error').hide();
+        var data = $(this).serializeArray();
+
+        $.post('/ajax/post/create', data, function (res) {
+            $('#post-loading').hide();
+            isLoading = false;
+            if (res.status) {
+                toastr.success(res.msg, '', {timeOut: 6000});
+                window.location.href = res.redirectUrl;
+            } else {
+                var err = "";
+                if (res.errors && res.errors.length > 0) {
+                    res.errors.forEach(e => {
+                        err += `<span>- ${e}</span>`;
+                    });
+                } else {
+                    err = res.msg;
+                }
+
+                $('#post-error').html(err);
+                $('#post-error').show();
+                setTimeout(function () {
+                    $('#post-error').hide();
+                }, 6000);
+                grecaptcha.reset(postRecaptcha);
+                $('#post-form').removeClass('recaptcha-clicked');
+            }
+        });
+    }
+})
+
+$(document).on('click', '.p-btn-vote', function () {
+    if (checkLogin()) {
+        if (!postVoteLoading) {
+            postVoteLoading = true;
+            const el = $(this);
+            const type = parseInt(el.data('type'));
+
+            const elCurrentVote = $('.p-btn-vote.active');
+            if (elCurrentVote.length > 0 && parseInt(elCurrentVote.data('type')) !== type) {
+                elCurrentVote.removeClass('active');
+                var elCurrentVoteValue = parseInt(elCurrentVote.find('.value').text());
+                if (elCurrentVoteValue > 0) {
+                    elCurrentVoteValue = elCurrentVoteValue - 1;
+                    elCurrentVote.find('.value').text(elCurrentVoteValue > 0 ? elCurrentVoteValue : "");
+                }
+            }
+
+            el.toggleClass("active");
+            var value = parseInt(el.find('.value').text());
+            if (value > 0) {
+                value = el.hasClass('active') ? (value + 1) : (value - 1);
+            } else {
+                value = 1;
+            }
+            el.find('.value').text(value > 0 ? value : "");
+
+            $.post('/ajax/post/vote', {id: post.id, type}, function (res) {
+                postVoteLoading = false;
+            })
+        }
+    }
+});
+
+$(document).on('click', '.post-action', function () {
+    const action = $(this).data('action'), id = $(this).data('id');
+    $.post('/ajax/post/update', {id, action}, function (res) {
+        if (res) {
+            res.status && toastr.success(res.msg, '', {timeOut: 6000});
+            !res.status && toastr.error(res.msg, '', {timeOut: 6000});
+        }
+    });
+});
